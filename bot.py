@@ -95,6 +95,8 @@ async def safe_client_init():
             await ensure_time_sync()
             
             print(f"[INFO] Starting Pyrogram client (attempt {attempt + 1}/{max_retries})")
+            
+            # Create the client
             AHBot = Client(
                 Config.BOT_USERNAME, 
                 bot_token=Config.BOT_TOKEN, 
@@ -126,10 +128,15 @@ async def safe_client_init():
                     continue
                 raise
 
-# Global client variable
-AHBot = None
+# Create the client instance first
+AHBot = Client(
+    Config.BOT_USERNAME, 
+    bot_token=Config.BOT_TOKEN, 
+    api_id=Config.API_ID, 
+    api_hash=Config.API_HASH
+)
 
-# Your existing handler functions (keeping them exactly as they are)
+# Now register all handlers on the created client
 @AHBot.on_message(filters.command(["start", "help"]) & filters.private)
 async def HelpWatermark(bot, cmd):
     if not await db.is_user_exist(cmd.from_user.id):
@@ -639,12 +646,13 @@ async def main():
     global AHBot
     try:
         print("[INFO] Starting Watermark Bot...")
+        print("[INFO] Client object created, handlers registered")
         print("[INFO] Initializing Pyrogram client...")
         
-        # Initialize client safely
+        # Start the client safely (this will handle time sync)
         AHBot = await safe_client_init()
         
-        print("[INFO] Client initialized successfully")
+        print("[INFO] Client started successfully")
         print("[INFO] Starting idle loop...")
         
         # Start the bot's idle loop
@@ -657,7 +665,7 @@ async def main():
         import traceback
         traceback.print_exc()
     finally:
-        if AHBot and AHBot.is_connected:
+        if AHBot.is_connected:
             print("[INFO] Stopping client...")
             await AHBot.stop()
             print("[INFO] Client stopped")
