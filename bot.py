@@ -1,6 +1,6 @@
 # (c) @AbirHasan2005
 # Telegram Video Watermark Adder Bot
-# Fixed for Heroku deployment
+# FIXED for Heroku time sync issues
 
 import os
 import time
@@ -23,10 +23,12 @@ from core.handlers.broadcast_handlers import broadcast_handler
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.errors.exceptions.flood_420 import FloodWait
 from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant, MessageNotModified
+from pyrogram.errors import BadMsgNotification
 
 # Create client
 AHBot = Client(Config.BOT_USERNAME, bot_token=Config.BOT_TOKEN, api_id=Config.API_ID, api_hash=Config.API_HASH)
 
+# ALL YOUR ORIGINAL HANDLERS (exactly same as before)
 @AHBot.on_message(filters.command(["start", "help"]) & filters.private)
 async def HelpWatermark(bot, cmd):
     if not await db.is_user_exist(cmd.from_user.id):
@@ -531,68 +533,134 @@ async def button(bot, cmd: CallbackQuery):
         await db.add_user(cmd.from_user.id)
         await cmd.answer("Settings Reseted Successfully!", show_alert=True)
 
-# Heroku-friendly startup with time sync
-async def startup():
-    """Heroku-friendly startup with time sync"""
-    print("🟢 Starting Watermark Bot...")
+# ULTIMATE TIME SYNC FUNCTION FOR HEROKU
+async def heroku_time_sync():
+    """Ultimate time sync for Heroku - multiple fallback methods"""
+    print("🔄 Attempting Heroku time sync...")
     
-    # Wait for Heroku to settle
-    print("⏳ Waiting 10 seconds for Heroku to settle...")
-    await asyncio.sleep(10)
+    # Method 1: Wait longer for Heroku to settle
+    print("⏳ Waiting 15 seconds for Heroku dyno to fully boot...")
+    await asyncio.sleep(15)
     
-    # Simple time sync for Heroku (no ntpdate needed)
-    print("🔄 Syncing time...")
-    try:
-        # Use curl to get current time if possible
-        import subprocess
-        result = subprocess.run(['curl', '-s', 'http://worldtimeapi.org/api/timezone/UTC'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            print("✅ Time sync successful via HTTP")
-        else:
-            print("⚠️  Time sync failed, but continuing...")
-    except:
-        print("⚠️  No time sync available, continuing...")
+    # Method 2: Delete existing session file (this is the KEY!)
+    session_file = f"{Config.BOT_USERNAME}.session"
+    if os.path.exists(session_file):
+        try:
+            os.remove(session_file)
+            print("🗑️  Deleted old session file")
+        except:
+            pass
     
-    await asyncio.sleep(3)
+    # Method 3: Multiple wait attempts with increasing delays
+    delays = [5, 10, 15, 20, 30, 45, 60]
+    for i, delay in enumerate(delays):
+        print(f"⏳ Waiting {delay} seconds (attempt {i+1}/{len(delays)})...")
+        await asyncio.sleep(delay)
+        
+        try:
+            # Test if we can connect
+            temp_client = Client(
+                Config.BOT_USERNAME, 
+                bot_token=Config.BOT_TOKEN, 
+                api_id=Config.API_ID, 
+                api_hash=Config.API_HASH
+            )
+            await temp_client.start()
+            me = await temp_client.get_me()
+            await temp_client.stop()
+            print(f"✅ Time sync successful after {delay}s wait!")
+            return True
+        except BadMsgNotification as e:
+            if "msg_id is too low" in str(e):
+                print(f"⚠️  Time sync still needed, waiting more...")
+                continue
+            else:
+                raise
+        except Exception as e:
+            print(f"⚠️  Connection test failed: {e}")
+            continue
     
-    # Start the bot
-    print("🚀 Starting Pyrogram client...")
-    await AHBot.start()
+    print("⚠️  All time sync attempts failed, proceeding anyway...")
+    return False
+
+# ROBUST STARTUP FUNCTION
+async def robust_startup():
+    """Robust startup with retry logic for Heroku"""
+    print("🚀 Starting Watermark Bot with robust Heroku support...")
     
-    me = await AHBot.get_me()
-    print(f"✅ Bot started successfully!")
-    print(f"👤 Bot: {me.first_name} (@{me.username})")
-    print(f"🟢 Bot is now running and ready to receive messages!")
-    
-    return AHBot
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            print(f"\n🔄 Startup attempt {attempt + 1}/{max_retries}")
+            
+            # Do time sync
+            await heroku_time_sync()
+            
+            # Wait a bit more
+            await asyncio.sleep(5)
+            
+            # Start the main client
+            print("🔌 Starting main Pyrogram client...")
+            await AHBot.start()
+            
+            me = await AHBot.get_me()
+            print(f"✅ SUCCESS! Bot connected!")
+            print(f"👤 Bot: {me.first_name} (@{me.username})")
+            print(f"🟢 Bot is running and ready!")
+            
+            return AHBot
+            
+        except BadMsgNotification as e:
+            if "msg_id is too low" in str(e):
+                wait_time = (attempt + 1) * 10
+                print(f"⏰ Time sync error detected! Waiting {wait_time}s before retry...")
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                raise
+        except Exception as e:
+            print(f"❌ Startup failed: {e}")
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 15
+                print(f"⏳ Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                raise
 
 # Main execution
 async def main():
     bot = None
     try:
-        bot = await startup()
-        print("🔄 Starting idle loop...")
+        # Robust startup
+        bot = await robust_startup()
         
-        # CORRECT WAY: Use instance method, not class method
-        await bot.idle()  # This is the RIGHT way!
+        print("\n🎉 Bot is fully operational!")
+        print("🔄 Entering idle mode...")
+        
+        # Keep the bot running
+        await bot.idle()
         
     except KeyboardInterrupt:
-        print("\n🛑 Received keyboard interrupt")
+        print("\n🛑 Shutting down gracefully...")
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
+        print(f"💥 Unexpected error: {e}")
         import traceback
         traceback.print_exc()
     finally:
-        if bot and not bot.is_connected:
-            print("🔴 Stopping bot...")
-            await bot.stop()
-            print("✅ Bot stopped cleanly")
+        if bot:
+            try:
+                if bot.is_connected:
+                    await bot.stop()
+                print("✅ Bot stopped cleanly")
+            except:
+                pass
 
 if __name__ == "__main__":
     try:
+        print("🐍 Starting Python asyncio event loop...")
         asyncio.run(main())
     except Exception as e:
-        print(f"💥 Failed to start bot: {e}")
+        print(f"💥 Fatal startup error: {e}")
         import traceback
         traceback.print_exc()
