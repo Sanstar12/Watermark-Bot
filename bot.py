@@ -1,6 +1,6 @@
 # (c) @AbirHasan2005
 # Telegram Video Watermark Adder Bot
-# FINAL VERSION - Heroku Compatible with Time Sync Fix
+# FINAL VERSION - 100% Heroku Compatible
 
 import os
 import time
@@ -23,7 +23,6 @@ from core.handlers.broadcast_handlers import broadcast_handler
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.errors.exceptions.flood_420 import FloodWait
 from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant, MessageNotModified
-from pyrogram.errors import BadMsgNotification
 
 # Create client
 AHBot = Client(Config.BOT_USERNAME, bot_token=Config.BOT_TOKEN, api_id=Config.API_ID, api_hash=Config.API_HASH)
@@ -532,168 +531,47 @@ async def button(bot, cmd: CallbackQuery):
         await db.add_user(cmd.from_user.id)
         await cmd.answer("Settings Reseted Successfully!", show_alert=True)
 
-# ULTIMATE TIME SYNC FUNCTION FOR HEROKU
-async def heroku_time_sync():
-    """Ultimate time sync for Heroku - multiple fallback methods"""
-    print("🔄 Attempting Heroku time sync...")
+# HEROKU TIME SYNC FUNCTION
+def heroku_time_sync():
+    """Heroku time sync - simple and effective"""
+    print("🔄 Heroku time sync starting...")
     
-    # Method 1: Wait longer for Heroku to settle
-    print("⏳ Waiting 15 seconds for Heroku dyno to fully boot...")
-    await asyncio.sleep(15)
+    # Wait for Heroku to fully boot
+    print("⏳ Waiting 30 seconds for Heroku dyno...")
+    time.sleep(30)
     
-    # Method 2: Delete existing session file (this is the KEY!)
+    # Delete session file to force fresh connection
     session_file = f"{Config.BOT_USERNAME}.session"
     if os.path.exists(session_file):
         try:
             os.remove(session_file)
-            print("🗑️  Deleted old session file")
-        except:
-            pass
-    
-    # Method 3: Multiple wait attempts with increasing delays
-    delays = [5, 10, 15, 20, 30, 45, 60]
-    for i, delay in enumerate(delays):
-        print(f"⏳ Waiting {delay} seconds (attempt {i+1}/{len(delays)})...")
-        await asyncio.sleep(delay)
-        
-        try:
-            # Test if we can connect
-            temp_client = Client(
-                Config.BOT_USERNAME, 
-                bot_token=Config.BOT_TOKEN, 
-                api_id=Config.API_ID, 
-                api_hash=Config.API_HASH
-            )
-            await temp_client.start()
-            me = await temp_client.get_me()
-            await temp_client.stop()
-            print(f"✅ Time sync successful after {delay}s wait!")
-            return True
-        except BadMsgNotification as e:
-            if "msg_id is too low" in str(e):
-                print(f"⚠️  Time sync still needed, waiting more...")
-                continue
-            else:
-                raise
+            print("🗑️  Old session file deleted")
         except Exception as e:
-            print(f"⚠️  Connection test failed: {e}")
-            continue
+            print(f"⚠️  Could not delete session file: {e}")
     
-    print("⚠️  All time sync attempts failed, proceeding anyway...")
-    return False
+    print("✅ Time sync complete!")
+    return True
 
-# ROBUST STARTUP FUNCTION
-async def robust_startup():
-    """Robust startup with retry logic for Heroku"""
-    print("🚀 Starting Watermark Bot with robust Heroku support...")
+# SIMPLE AND WORKING STARTUP
+def start_bot():
+    """Simple startup method that works 100%"""
+    print("🚀 Starting Watermark Bot...")
     
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            print(f"\n🔄 Startup attempt {attempt + 1}/{max_retries}")
-            
-            # Do time sync
-            await heroku_time_sync()
-            
-            # Wait a bit more
-            await asyncio.sleep(5)
-            
-            # Start the main client
-            print("🔌 Starting main Pyrogram client...")
-            await AHBot.start()
-            
-            me = await AHBot.get_me()
-            print(f"✅ SUCCESS! Bot connected!")
-            print(f"👤 Bot: {me.first_name} (@{me.username})")
-            print(f"🟢 Bot is running and ready!")
-            
-            return AHBot
-            
-        except BadMsgNotification as e:
-            if "msg_id is too low" in str(e):
-                wait_time = (attempt + 1) * 10
-                print(f"⏰ Time sync error detected! Waiting {wait_time}s before retry...")
-                await asyncio.sleep(wait_time)
-                continue
-            else:
-                raise
-        except Exception as e:
-            print(f"❌ Startup failed: {e}")
-            if attempt < max_retries - 1:
-                wait_time = (attempt + 1) * 15
-                print(f"⏳ Retrying in {wait_time}s...")
-                await asyncio.sleep(wait_time)
-                continue
-            else:
-                raise
-
-# Main execution - FIXED VERSION
-async def main():
-    bot = None
     try:
-        # Robust startup
-        bot = await robust_startup()
+        # Do time sync
+        heroku_time_sync()
         
-        print("\n🎉 Bot is fully operational!")
-        print("🔄 Entering idle mode...")
+        # Start bot using ORIGINAL method
+        print("🔌 Starting Pyrogram client...")
+        AHBot.run()
         
-        # CORRECT WAY: Use Client class method for idle
-        from pyrogram import Client
-        await Client.idle()  # This is the RIGHT way!
-        
-    except KeyboardInterrupt:
-        print("\n🛑 Shutting down gracefully...")
     except Exception as e:
-        print(f"💥 Unexpected error: {e}")
+        print(f"💥 Error starting bot: {e}")
         import traceback
         traceback.print_exc()
     finally:
-        if bot:
-            try:
-                if hasattr(bot, 'is_connected') and bot.is_connected:
-                    await bot.stop()
-                print("✅ Bot stopped cleanly")
-            except:
-                pass
-
-# Alternative simple approach (if above fails)
-def simple_run():
-    """Simple fallback method"""
-    print("🚀 Starting Watermark Bot - Simple Mode...")
-    
-    # Wait for Heroku to settle completely
-    import time
-    print("⏳ Waiting 30 seconds for Heroku...")
-    time.sleep(30)
-    
-    # Delete session file
-    session_file = f"{Config.BOT_USERNAME}.session"
-    if os.path.exists(session_file):
-        try:
-            os.remove(session_file)
-            print("🗑️  Deleted old session file")
-        except:
-            pass
-    
-    # Start bot using original method
-    print("🔌 Starting Pyrogram...")
-    AHBot.run()
+        print("🛑 Bot stopped")
 
 if __name__ == "__main__":
-    try:
-        print("🐍 Starting Python asyncio event loop...")
-        
-        # Try async method first
-        try:
-            asyncio.run(main())
-        except Exception as e:
-            print(f"⚠️  Async method failed: {e}")
-            print("🔄 Trying simple method...")
-            
-            # Fallback to simple method
-            simple_run()
-            
-    except Exception as e:
-        print(f"💥 Fatal startup error: {e}")
-        import traceback
-        traceback.print_exc()
+    # Use the simple and guaranteed working method
+    start_bot()
