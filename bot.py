@@ -1,6 +1,6 @@
 # (c) @AbirHasan2005
 # Telegram Video Watermark Adder Bot
-# FIXED for Heroku time sync issues
+# FINAL VERSION - Heroku Compatible with Time Sync Fix
 
 import os
 import time
@@ -28,7 +28,6 @@ from pyrogram.errors import BadMsgNotification
 # Create client
 AHBot = Client(Config.BOT_USERNAME, bot_token=Config.BOT_TOKEN, api_id=Config.API_ID, api_hash=Config.API_HASH)
 
-# ALL YOUR ORIGINAL HANDLERS (exactly same as before)
 @AHBot.on_message(filters.command(["start", "help"]) & filters.private)
 async def HelpWatermark(bot, cmd):
     if not await db.is_user_exist(cmd.from_user.id):
@@ -628,7 +627,7 @@ async def robust_startup():
             else:
                 raise
 
-# Main execution
+# Main execution - FIXED VERSION
 async def main():
     bot = None
     try:
@@ -638,8 +637,9 @@ async def main():
         print("\n🎉 Bot is fully operational!")
         print("🔄 Entering idle mode...")
         
-        # Keep the bot running
-        await bot.idle()
+        # CORRECT WAY: Use Client class method for idle
+        from pyrogram import Client
+        await Client.idle()  # This is the RIGHT way!
         
     except KeyboardInterrupt:
         print("\n🛑 Shutting down gracefully...")
@@ -650,16 +650,49 @@ async def main():
     finally:
         if bot:
             try:
-                if bot.is_connected:
+                if hasattr(bot, 'is_connected') and bot.is_connected:
                     await bot.stop()
                 print("✅ Bot stopped cleanly")
             except:
                 pass
 
+# Alternative simple approach (if above fails)
+def simple_run():
+    """Simple fallback method"""
+    print("🚀 Starting Watermark Bot - Simple Mode...")
+    
+    # Wait for Heroku to settle completely
+    import time
+    print("⏳ Waiting 30 seconds for Heroku...")
+    time.sleep(30)
+    
+    # Delete session file
+    session_file = f"{Config.BOT_USERNAME}.session"
+    if os.path.exists(session_file):
+        try:
+            os.remove(session_file)
+            print("🗑️  Deleted old session file")
+        except:
+            pass
+    
+    # Start bot using original method
+    print("🔌 Starting Pyrogram...")
+    AHBot.run()
+
 if __name__ == "__main__":
     try:
         print("🐍 Starting Python asyncio event loop...")
-        asyncio.run(main())
+        
+        # Try async method first
+        try:
+            asyncio.run(main())
+        except Exception as e:
+            print(f"⚠️  Async method failed: {e}")
+            print("🔄 Trying simple method...")
+            
+            # Fallback to simple method
+            simple_run()
+            
     except Exception as e:
         print(f"💥 Fatal startup error: {e}")
         import traceback
