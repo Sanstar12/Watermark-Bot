@@ -1,23 +1,13 @@
 # (c) @AbirHasan2005
-# This is Telegram Video Watermark Adder Bot's Source Code.
-# I Hardly Made This. So Don't Forget to Give Me Credits.
-# Done this Huge Task for Free. If you guys not support me,
-# I will stop making such things!
-
-# Edit anything at your own risk!
-# Don't forget to help me if I done any mistake in the codes.
-# Support Group: @DevsZone 
-# Bots Channel: @Discovery_Updates
+# Telegram Video Watermark Adder Bot
+# Fixed for Heroku deployment
 
 import os
-import sys
 import time
 import json
 import random
 import asyncio
-import subprocess
 import aiohttp
-from datetime import datetime
 from hachoir.metadata import extractMetadata
 from hachoir.parser import createParser
 from PIL import Image
@@ -34,109 +24,9 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 from pyrogram.errors.exceptions.flood_420 import FloodWait
 from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant, MessageNotModified
 
-# Import the specific BadMsgNotification error
-try:
-    from pyrogram.errors.exceptions.rpc_error_303 import BadMsgNotification
-except ImportError:
-    try:
-        from pyrogram.errors import BadMsgNotification
-    except ImportError:
-        # Fallback: We'll handle it through exception catching
-        BadMsgNotification = Exception
+# Create client
+AHBot = Client(Config.BOT_USERNAME, bot_token=Config.BOT_TOKEN, api_id=Config.API_ID, api_hash=Config.API_HASH)
 
-# Time synchronization function
-async def ensure_time_sync():
-    """Ensure system time is synchronized before starting Pyrogram"""
-    print(f"[INFO] Current system time: {datetime.now().isoformat()}")
-    
-    # Method 1: Try NTP sync
-    try:
-        result = subprocess.run(
-            ['ntpdate', '-q', 'pool.ntp.org'],
-            capture_output=True, text=True, timeout=10
-        )
-        if "offset" in result.stdout:
-            print("[INFO] NTP query successful")
-            # Apply sync
-            subprocess.run(['ntpdate', '-s', 'pool.ntp.org'], 
-                         capture_output=True, check=True)
-            print("[INFO] Time synchronized with NTP")
-            await asyncio.sleep(2)  # Wait for system to settle
-            return True
-    except Exception as e:
-        print(f"[WARNING] NTP sync failed: {e}")
-    
-    # Method 2: Fallback to HTTP time sync
-    try:
-        import requests
-        response = requests.head('http://worldtimeapi.org/api/timezone/UTC', timeout=5)
-        if response.status_code == 200:
-            server_time = response.headers.get('Date')
-            print(f"[INFO] Server time from HTTP: {server_time}")
-            print("[INFO] HTTP time sync completed")
-            await asyncio.sleep(1)
-            return True
-    except Exception as e:
-        print(f"[WARNING] HTTP time sync failed: {e}")
-    
-    print("[WARNING] No time sync method succeeded, proceeding anyway")
-    await asyncio.sleep(3)  # Give extra time for Heroku to settle
-    return False
-
-# Safe Pyrogram client initialization
-async def safe_client_init():
-    """Safely initialize Pyrogram client with retry logic"""
-    max_retries = 3
-    retry_delay = 5
-    
-    for attempt in range(max_retries):
-        try:
-            # Sync time before each attempt
-            await ensure_time_sync()
-            
-            print(f"[INFO] Starting Pyrogram client (attempt {attempt + 1}/{max_retries})")
-            
-            # Create the client
-            client = Client(
-                Config.BOT_USERNAME, 
-                bot_token=Config.BOT_TOKEN, 
-                api_id=Config.API_ID, 
-                api_hash=Config.API_HASH
-            )
-            
-            # Test connection
-            await client.start()
-            me = await client.get_me()
-            print(f"[SUCCESS] Connected as {me.first_name} (@{me.username})")
-            
-            return client
-            
-        except Exception as e:
-            if "msg_id is too low" in str(e) or "BadMsgNotification" in str(e):
-                if attempt < max_retries - 1:
-                    print(f"[WARNING] Time sync issue detected (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
-                    await asyncio.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                    continue
-                else:
-                    print(f"[ERROR] Time sync issue persists after {max_retries} attempts: {e}")
-                    raise
-            else:
-                print(f"[ERROR] Failed to start client (attempt {attempt + 1}): {e}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay)
-                    continue
-                raise
-
-# Create the client instance first
-AHBot = Client(
-    Config.BOT_USERNAME, 
-    bot_token=Config.BOT_TOKEN, 
-    api_id=Config.API_ID, 
-    api_hash=Config.API_HASH
-)
-
-# Now register all handlers on the created client
 @AHBot.on_message(filters.command(["start", "help"]) & filters.private)
 async def HelpWatermark(bot, cmd):
     if not await db.is_user_exist(cmd.from_user.id):
@@ -641,41 +531,68 @@ async def button(bot, cmd: CallbackQuery):
         await db.add_user(cmd.from_user.id)
         await cmd.answer("Settings Reseted Successfully!", show_alert=True)
 
-# Main execution with proper error handling
-async def main():
-    global AHBot
+# Heroku-friendly startup with time sync
+async def startup():
+    """Heroku-friendly startup with time sync"""
+    print("🟢 Starting Watermark Bot...")
+    
+    # Wait for Heroku to settle
+    print("⏳ Waiting 10 seconds for Heroku to settle...")
+    await asyncio.sleep(10)
+    
+    # Simple time sync for Heroku (no ntpdate needed)
+    print("🔄 Syncing time...")
     try:
-        print("[INFO] Starting Watermark Bot...")
-        print("[INFO] Client object created, handlers registered")
-        print("[INFO] Initializing Pyrogram client...")
+        # Use curl to get current time if possible
+        import subprocess
+        result = subprocess.run(['curl', '-s', 'http://worldtimeapi.org/api/timezone/UTC'], 
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            print("✅ Time sync successful via HTTP")
+        else:
+            print("⚠️  Time sync failed, but continuing...")
+    except:
+        print("⚠️  No time sync available, continuing...")
+    
+    await asyncio.sleep(3)
+    
+    # Start the bot
+    print("🚀 Starting Pyrogram client...")
+    await AHBot.start()
+    
+    me = await AHBot.get_me()
+    print(f"✅ Bot started successfully!")
+    print(f"👤 Bot: {me.first_name} (@{me.username})")
+    print(f"🟢 Bot is now running and ready to receive messages!")
+    
+    return AHBot
+
+# Main execution
+async def main():
+    bot = None
+    try:
+        bot = await startup()
+        print("🔄 Starting idle loop...")
         
-        # Start the client safely (this will handle time sync)
-        AHBot = await safe_client_init()
-        
-        print("[INFO] Client started successfully")
-        print("[INFO] Starting idle loop...")
-        
-        # Use the correct idle method
-        await Client.idle()  # This is the correct way
+        # CORRECT WAY: Use instance method, not class method
+        await bot.idle()  # This is the RIGHT way!
         
     except KeyboardInterrupt:
-        print("[INFO] Received keyboard interrupt")
+        print("\n🛑 Received keyboard interrupt")
     except Exception as e:
-        print(f"[ERROR] Fatal error: {e}")
+        print(f"❌ Fatal error: {e}")
         import traceback
         traceback.print_exc()
     finally:
-        if hasattr(AHBot, 'is_connected') and AHBot.is_connected:
-            print("[INFO] Stopping client...")
-            await AHBot.stop()
-            print("[INFO] Client stopped")
+        if bot and not bot.is_connected:
+            print("🔴 Stopping bot...")
+            await bot.stop()
+            print("✅ Bot stopped cleanly")
 
 if __name__ == "__main__":
-    # Run the main function
     try:
         asyncio.run(main())
     except Exception as e:
-        print(f"[FATAL] Failed to start bot: {e}")
+        print(f"💥 Failed to start bot: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
