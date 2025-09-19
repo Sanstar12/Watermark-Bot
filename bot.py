@@ -97,7 +97,7 @@ async def safe_client_init():
             print(f"[INFO] Starting Pyrogram client (attempt {attempt + 1}/{max_retries})")
             
             # Create the client
-            AHBot = Client(
+            client = Client(
                 Config.BOT_USERNAME, 
                 bot_token=Config.BOT_TOKEN, 
                 api_id=Config.API_ID, 
@@ -105,11 +105,11 @@ async def safe_client_init():
             )
             
             # Test connection
-            await AHBot.start()
-            me = await AHBot.get_me()
+            await client.start()
+            me = await client.get_me()
             print(f"[SUCCESS] Connected as {me.first_name} (@{me.username})")
             
-            return AHBot
+            return client
             
         except Exception as e:
             if "msg_id is too low" in str(e) or "BadMsgNotification" in str(e):
@@ -655,8 +655,8 @@ async def main():
         print("[INFO] Client started successfully")
         print("[INFO] Starting idle loop...")
         
-        # Start the bot's idle loop
-        await AHBot.idle()
+        # Use the correct idle method
+        await Client.idle()  # This is the correct way
         
     except KeyboardInterrupt:
         print("[INFO] Received keyboard interrupt")
@@ -665,7 +665,7 @@ async def main():
         import traceback
         traceback.print_exc()
     finally:
-        if AHBot.is_connected:
+        if hasattr(AHBot, 'is_connected') and AHBot.is_connected:
             print("[INFO] Stopping client...")
             await AHBot.stop()
             print("[INFO] Client stopped")
