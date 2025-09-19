@@ -33,7 +33,16 @@ from core.handlers.broadcast_handlers import broadcast_handler
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.errors.exceptions.flood_420 import FloodWait
 from pyrogram.errors.exceptions.bad_request_400 import UserNotParticipant, MessageNotModified
-from pyrogram.errors.exceptions import BadMsgNotification
+
+# Import the specific BadMsgNotification error
+try:
+    from pyrogram.errors.exceptions.rpc_error_303 import BadMsgNotification
+except ImportError:
+    try:
+        from pyrogram.errors import BadMsgNotification
+    except ImportError:
+        # Fallback: We'll handle it through exception catching
+        BadMsgNotification = Exception
 
 # Time synchronization function
 async def ensure_time_sync():
@@ -100,21 +109,25 @@ async def safe_client_init():
             
             return AHBot
             
-        except BadMsgNotification as e:
-            if "msg_id is too low" in str(e) and attempt < max_retries - 1:
-                print(f"[WARNING] Time sync issue detected (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-                continue
-            else:
-                print(f"[ERROR] BadMsgNotification: {e}")
-                raise
         except Exception as e:
-            print(f"[ERROR] Failed to start client (attempt {attempt + 1}): {e}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(retry_delay)
-                continue
-            raise
+            if "msg_id is too low" in str(e) or "BadMsgNotification" in str(e):
+                if attempt < max_retries - 1:
+                    print(f"[WARNING] Time sync issue detected (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                else:
+                    print(f"[ERROR] Time sync issue persists after {max_retries} attempts: {e}")
+                    raise
+            else:
+                print(f"[ERROR] Failed to start client (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                    continue
+                raise
+
+# Global client variable
+AHBot = None
 
 # Your existing handler functions (keeping them exactly as they are)
 @AHBot.on_message(filters.command(["start", "help"]) & filters.private)
@@ -426,21 +439,21 @@ async def CancelWatermarkAdder(bot, cmd):
         return
 
     status = Config.DOWN_PATH + "/WatermarkAdder/status.json"
-    with open(status, 'r+') as f:
-        statusMsg = json.load(f)
-        if 'pid' in statusMsg.keys():
-            try:
-                os.kill(statusMsg["pid"], 9)
-                await delete_trash(status)
-            except Exception as err:
-                print(err)
+    if os.path.exists(status):
+        try:
+            with open(status, 'r+') as f:
+                statusMsg = json.load(f)
+                if 'pid' in statusMsg.keys():
+                    try:
+                        os.kill(statusMsg["pid"], 9)
+                        await delete_trash(status)
+                    except Exception as err:
+                        print(err)
+        except Exception as e:
+            print(f"Error reading status file: {e}")
     await delete_all()
     await bot.send_message(chat_id=Config.LOG_CHANNEL, text="#WATERMARK_ADDER: Stopped!")
     await cmd.reply_text("Watermark Adding Process Stopped!")
-    try:
-        await bot.edit_message_text(chat_id=int(statusMsg["chat_id"]), message_id=int(statusMsg["message"]), text="🚦🚦 Last Process Stopped 🚦🚦")
-    except:
-        pass
 
 @AHBot.on_message(filters.private & filters.command("broadcast") & filters.user(Config.OWNER_ID) & filters.reply)
 async def open_broadcast_handler(bot, message):
@@ -623,12 +636,12 @@ async def button(bot, cmd: CallbackQuery):
 
 # Main execution with proper error handling
 async def main():
+    global AHBot
     try:
         print("[INFO] Starting Watermark Bot...")
         print("[INFO] Initializing Pyrogram client...")
         
         # Initialize client safely
-        global AHBot
         AHBot = await safe_client_init()
         
         print("[INFO] Client initialized successfully")
@@ -644,7 +657,7 @@ async def main():
         import traceback
         traceback.print_exc()
     finally:
-        if 'AHBot' in globals() and AHBot.is_connected:
+        if AHBot and AHBot.is_connected:
             print("[INFO] Stopping client...")
             await AHBot.stop()
             print("[INFO] Client stopped")
